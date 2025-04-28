@@ -6,7 +6,6 @@ from .analytics import Analytics
 from .cache import ChatCache
 from .logger import AppLogger
 from .monitor import PerformanceMonitor
-from .logger import AppLogger
 
 try:
     import psutil

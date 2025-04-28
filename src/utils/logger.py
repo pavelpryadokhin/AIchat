@@ -1,7 +1,6 @@
-# Импорт необходимых библиотек
-import logging  # Стандартная библиотека Python для логирования
-import os  # Библиотека для работы с операционной системой и файлами
-from datetime import datetime  # Библиотека для работы с датой и временем
+import logging
+import os
+from datetime import datetime
 
 
 class AppLogger:
@@ -25,39 +24,30 @@ class AppLogger:
         - Обработчики для файла и консоли
         - Уровни логирования
         """
-        # Создание директории для хранения файлов логов
         self.logs_dir = "logs"
         if not os.path.exists(self.logs_dir):
             os.makedirs(self.logs_dir)
 
-        # Формирование имени файла лога с текущей датой
-        # Формат: chat_app_YYYY-MM-DD.log
         current_date = datetime.now().strftime("%Y-%m-%d")
         log_file = os.path.join(self.logs_dir, f"chat_app_{current_date}.log")
-
-        # Настройка формата сообщений лога
-        # Формат: YYYY-MM-DD HH:MM:SS - LEVEL - Message
         formatter = logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(message)s',  # Шаблон сообщения
-            datefmt='%Y-%m-%d %H:%M:%S'  # Формат даты и времени
+            '%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
         )
 
-        # Создание и настройка обработчика для записи в файл
         file_handler = logging.FileHandler(
-            log_file,  # Путь к файлу лога
-            encoding='utf-8'  # Кодировка для поддержки Unicode
+            log_file,
+            encoding='utf-8'
         )
-        file_handler.setFormatter(formatter)  # Установка форматирования
+        file_handler.setFormatter(formatter)
 
-        # Создание и настройка обработчика для вывода в консоль
         console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)  # Установка того же форматирования
+        console_handler.setFormatter(formatter)
 
-        # Настройка основного логгера приложения
-        self.logger = logging.getLogger('ChatApp')  # Создание логгера с именем
-        self.logger.setLevel(logging.DEBUG)  # Установка уровня логирования
-        self.logger.addHandler(file_handler)  # Добавление файлового обработчика
-        self.logger.addHandler(console_handler)  # Добавление консольного обработчика
+        self.logger = logging.getLogger('ChatApp')
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
 
     def info(self, message: str):
         """

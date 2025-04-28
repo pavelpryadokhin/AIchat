@@ -1,5 +1,4 @@
-import flet as ft  # Импортируем фреймворк Flet для создания пользовательского интерфейса
-
+import flet as ft
 
 class AppStyles:
     """
