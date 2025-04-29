@@ -1,12 +1,12 @@
 import flet as ft
-from api.openrouter import OpenRouterClient
-from ui import AppStyles, MessageBubble, ModelSelector
-from utils import ChatCache, AppLogger, Analytics, PerformanceMonitor
+import os
 import asyncio
 import time
 import json
 from datetime import datetime
-import os
+from api.openrouter import OpenRouterClient
+from ui import AppStyles, MessageBubble, ModelSelector
+from utils import ChatCache, AppLogger, Analytics, PerformanceMonitor
 
 
 class ChatApp:

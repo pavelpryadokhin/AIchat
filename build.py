@@ -18,82 +18,112 @@ def build_windows():
     bin_dir = Path("bin")
     bin_dir.mkdir(exist_ok=True)
 
-    # Запускаем PyInstaller со следующими параметрами:
-    # --onefile: создать один исполняемый файл
-    # --windowed: запускать без консольного окна
-    # --name: задать имя выходного файла
-    # --clean: очистить кэш PyInstaller перед сборкой
-    # --noupx: не использовать UPX для сжатия
-    # --uac-admin: запрашивать права администратора при запуске
-    subprocess.run([
-        "pyinstaller",
-        "--onefile",
-        "--windowed",
-        "--name=AI Chat",
-        "--clean",
-        "--noupx",
-        "--uac-admin",
-        "src/main.py"
-    ])
+    # Create __init__.py files in all source directories to make them proper Python packages
+    create_init_files()
 
-    # Перемещаем собранный файл в директорию bin
-    # Используем try/except для обработки возможных ошибок при перемещении
-    try:
-        shutil.move("dist/AI Chat.exe", "bin/AIChat.exe")
-        print("Windows build completed! Executable location: bin/AIChat.exe")
-    except:
-        print("Windows build completed! Executable location: dist/AI Chat.exe")
+    # Выполняем сборку исполняемого файла с помощью PyInstaller
+    # -F: создать один файл вместо директории
+    # -w: запускать в оконном режиме (не показывать консоль)
+    # --icon: путь к иконке приложения
+    # -n: имя выходного файла
+    # --add-data: добавить дополнительные файлы/директории в сборку
+
+    # Если файл PyInstaller спецификации существует, используем его
+    spec_file = Path("aichat.spec")
+    if spec_file.exists():
+        subprocess.run([sys.executable, "-m", "PyInstaller", "aichat.spec"])
+    else:
+        # Создаем новый файл спецификации
+        subprocess.run([sys.executable, "-m", "PyInstaller", "-F", "-w", "--icon=assets/icon.ico", "-n", "aichat", "src/main.py"])
+
+    # Если сборка прошла успешно, копируем исполняемый файл в директорию bin
+    # shutil.copy2 - копирует файл с сохранением метаданных (даты создания и т.д.)
+    dist_file = Path("dist/aichat.exe")
+    if dist_file.exists():
+        shutil.copy2(dist_file, bin_dir / "aichat.exe")
+        print("Windows build completed! Executable location: bin/aichat.exe")
+    else:
+        print("Error: Windows build failed.")
 
 
 def build_linux():
     """Сборка исполняемого файла для Linux с помощью PyInstaller"""
     print("Building Linux executable...")
 
-    # Устанавливаем зависимости проекта для Linux
+    # Устанавливаем зависимости проекта для Linux из файла requirements.txt
     subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
 
     # Создаём директорию bin, если она не существует
     bin_dir = Path("bin")
     bin_dir.mkdir(exist_ok=True)
 
-    # Запускаем PyInstaller для Linux со следующими параметрами:
-    # --onefile: создать один исполняемый файл
-    # --windowed: запускать без консольного окна
-    # --icon: указать иконку приложения
-    # --name: задать имя выходного файла
-    subprocess.run([
-        "pyinstaller",
-        "--onefile",
-        "--windowed",
-        "--icon=assets/icon.ico",
-        "--name=aichat",
-        "src/main.py"
-    ])
+    # Create __init__.py files in all source directories to make them proper Python packages
+    create_init_files()
 
-    # Перемещаем собранный файл в директорию bin
-    try:
-        shutil.move("dist/aichat", "bin/aichat")
+    # Выполняем сборку исполняемого файла с помощью PyInstaller
+    # -F: создать один файл вместо директории
+    # -w: запускать в оконном режиме (не показывать консоль)
+    # --icon: путь к иконке приложения
+    # -n: имя выходного файла
+
+    # Если файл PyInstaller спецификации существует, используем его
+    spec_file = Path("aichat.spec")
+    if spec_file.exists():
+        subprocess.run([sys.executable, "-m", "PyInstaller", "aichat.spec"])
+    else:
+        # Создаем новый файл спецификации
+        subprocess.run([sys.executable, "-m", "PyInstaller", "-F", "-w", "--icon=assets/icon.ico", "-n", "aichat", "src/main.py"])
+
+    # Если сборка прошла успешно, копируем исполняемый файл в директорию bin
+    dist_file = Path("dist/aichat")
+    if dist_file.exists():
+        shutil.copy2(dist_file, bin_dir / "aichat")
         print("Linux build completed! Executable location: bin/aichat")
-    except:
-        print("Linux build completed! Executable location: dist/aichat")
+    else:
+        print("Error: Linux build failed.")
+
+
+def create_init_files():
+    """Create __init__.py files in source directories to make them proper Python packages"""
+    # Create __init__.py in src directory
+    src_dir = Path("src")
+    init_file = src_dir / "__init__.py"
+    if not init_file.exists():
+        with open(init_file, 'w') as f:
+            pass  # Create an empty file
+
+    # Create __init__.py in api directory
+    api_dir = src_dir / "api"
+    init_file = api_dir / "__init__.py"
+    if not init_file.exists():
+        with open(init_file, 'w') as f:
+            pass  # Create an empty file
+
+    # Create __init__.py in ui directory
+    ui_dir = src_dir / "ui"
+    init_file = ui_dir / "__init__.py"
+    if not init_file.exists():
+        with open(init_file, 'w') as f:
+            pass  # Create an empty file
+
+    # Create __init__.py in utils directory
+    utils_dir = src_dir / "utils"
+    init_file = utils_dir / "__init__.py"
+    if not init_file.exists():
+        with open(init_file, 'w') as f:
+            pass  # Create an empty file
 
 
 def main():
-    """Основная функция сборки
-
-    Определяет операционную систему и запускает соответствующую функцию сборки
-    """
-    # Проверяем тип операционной системы
-    if sys.platform.startswith('win'):  # Если Windows
+    """Выбор сборки в зависимости от операционной системы"""
+    # Определяем операционную систему на которой запущен скрипт
+    if sys.platform == "win32":
         build_windows()
-    elif sys.platform.startswith('linux'):  # Если Linux
+    elif sys.platform == "linux" or sys.platform == "linux2":
         build_linux()
-    else:  # Если другая ОС
-        print("Unsupported platform")
+    else:
+        print(f"Error: Unsupported platform {sys.platform}")
 
 
-# Точка входа в скрипт
-# Если скрипт запущен напрямую (не импортирован как модуль),
-# то запускаем основную функцию
 if __name__ == "__main__":
     main()

@@ -1,7 +1,7 @@
 import requests
 import os
 from dotenv import load_dotenv
-from src.utils import AppLogger
+from utils import AppLogger
 
 load_dotenv()
 
