@@ -4,8 +4,10 @@ import asyncio
 import time
 import json
 from datetime import datetime
-from api.openrouter import OpenRouterClient
-from ui import AppStyles, MessageBubble, ModelSelector
+import sys
+import dotenv
+from api import OpenRouterClient
+from ui import AppStyles, MessageBubble, ModelSelector, AuthScreen
 from utils import ChatCache, AppLogger, Analytics, PerformanceMonitor
 
 
@@ -24,10 +26,22 @@ class ChatApp:
         - Система аналитики для сбора статистики
         - Система мониторинга для отслеживания производительности
         """
-
-        self.api_client = OpenRouterClient()
-        self.cache = ChatCache()
         self.logger = AppLogger()
+        self.cache = ChatCache()
+        self.analytics = None
+        self.monitor = None
+        self.api_client = None
+        self.is_authenticated = False
+        
+        # Создание директории для экспорта истории чата
+        self.exports_dir = "exports"
+        os.makedirs(self.exports_dir, exist_ok=True)
+
+    def initialize_app_components(self):
+        """
+        Инициализация компонентов приложения после успешной аутентификации.
+        """
+        self.api_client = OpenRouterClient()
         self.analytics = Analytics(self.cache)
         self.monitor = PerformanceMonitor()
 
@@ -36,10 +50,6 @@ class ChatApp:
             **AppStyles.BALANCE_TEXT  # Применение стилей из конфигурации
         )
         self.update_balance()
-
-        # Создание директории для экспорта истории чата
-        self.exports_dir = "exports"
-        os.makedirs(self.exports_dir, exist_ok=True)
 
     def load_chat_history(self):
         """
@@ -78,6 +88,74 @@ class ChatApp:
             self.balance_text.value = "Баланс: н/д"
             self.balance_text.color = ft.Colors.RED_400  # Установка красного цвета для ошибки
             self.logger.error(f"Ошибка обновления баланса: {e}")
+            
+    def handle_api_key_submit(self, api_key, page):
+        """
+        Обработка отправки API ключа.
+        
+        Args:
+            api_key (str): API ключ OpenRouter.ai
+            page (ft.Page): Объект страницы для обновления UI
+        
+        Returns:
+            bool: True если ключ валидный, False иначе
+        """
+        try:
+            # Временно устанавливаем API ключ в .env для проверки
+            os.environ["OPENROUTER_API_KEY"] = api_key
+            
+            # Создаем временный экземпляр OpenRouterClient для проверки баланса
+            temp_client = OpenRouterClient()
+            balance = temp_client.get_balance()
+            
+            # Если получили баланс, значит ключ валидный
+            if balance and balance != "Ошибка":
+                # Сохраняем ключ в .env файл
+                env_path = ".env"
+                dotenv_file = dotenv.find_dotenv(env_path)
+                
+                if dotenv_file:
+                    dotenv.set_key(dotenv_file, "OPENROUTER_API_KEY", api_key)
+                else:
+                    with open(env_path, "w") as f:
+                        f.write(f"OPENROUTER_API_KEY={api_key}\n")
+                
+                # Регистрируем ключ и получаем PIN-код
+                pin_code = self.cache.register_api_key(api_key)
+                
+                # Показываем пользователю его PIN-код
+                self.auth_screen.show_success(f"Ваш PIN-код: {pin_code}\nЗапомните его для входа!")
+                return True
+            else:
+                self.auth_screen.show_error("Неверный API ключ или нулевой баланс")
+                return False
+        except Exception as e:
+            self.logger.error(f"Ошибка проверки API ключа: {e}")
+            self.auth_screen.show_error(f"Ошибка: {str(e)}")
+            return False
+            
+    def handle_pin_submit(self, pin_code, page):
+        """
+        Обработка отправки PIN-кода.
+        
+        Args:
+            pin_code (str): PIN-код для проверки
+            page (ft.Page): Объект страницы для обновления UI
+        
+        Returns:
+            bool: True если PIN-код верный, False иначе
+        """
+        if self.cache.verify_pin(pin_code):
+            return True
+        else:
+            self.auth_screen.show_error("Неверный PIN-код")
+            return False
+            
+    def handle_auth_reset(self):
+        """
+        Обработка сброса аутентификации.
+        """
+        self.auth_screen.switch_mode(None)  # Переключаемся в режим ввода API ключа
 
     def main(self, page: ft.Page):
         """
@@ -91,7 +169,54 @@ class ChatApp:
             setattr(page, key, value)
 
         AppStyles.set_window_size(page)
+        
+        # Создаем экран аутентификации
+        self.auth_screen = AuthScreen(
+            on_submit_api_key=lambda api_key: self.handle_api_key_validation(api_key, page),
+            on_submit_pin=lambda pin: self.handle_pin_validation(pin, page),
+            on_reset=self.handle_auth_reset
+        )
+        
+        # Сначала показываем экран аутентификации
+        page.add(ft.Container(
+            content=self.auth_screen,
+            alignment=ft.alignment.center,
+            expand=True
+        ))
+        
+        # Функции для обработки аутентификации
+        def initialize_main_app():
+            """Инициализация основного приложения после успешной аутентификации"""
+            self.initialize_app_components()
+            page.controls.clear()
+            self.setup_main_interface(page)
+            page.update()
+        
+        def handle_api_key_validation(api_key, page):
+            """Обработка валидации API ключа"""
+            is_valid = self.handle_api_key_submit(api_key, page)
+            if is_valid:
+                # Не переходим сразу к приложению, чтобы пользователь увидел свой PIN
+                self.is_authenticated = True
+        
+        def handle_pin_validation(pin, page):
+            """Обработка валидации PIN-кода"""
+            is_valid = self.handle_pin_submit(pin, page)
+            if is_valid:
+                initialize_main_app()
+                self.is_authenticated = True
+        
+        # Привязываем функции к обработчикам аутентификации
+        self.handle_api_key_validation = handle_api_key_validation
+        self.handle_pin_validation = handle_pin_validation
 
+    def setup_main_interface(self, page):
+        """
+        Настройка основного интерфейса приложения после аутентификации.
+        
+        Args:
+            page (ft.Page): Объект страницы Flet
+        """
         # Инициализация выпадающего списка для выбора модели AI
         models = self.api_client.available_models
         self.model_dropdown = ModelSelector(models)

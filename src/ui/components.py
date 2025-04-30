@@ -120,3 +120,227 @@ class ModelSelector(ft.Dropdown):
 
         # Обновление интерфейса для отображения отфильтрованного списка
         e.page.update()
+
+
+class AuthScreen(ft.UserControl):
+    """
+    Экран аутентификации с поддержкой ввода API ключа и PIN-кода.
+    
+    Предоставляет интерфейс для:
+    - Ввода API ключа OpenRouter при первом использовании
+    - Ввода PIN-кода для последующих входов
+    - Возможности сброса API ключа
+    """
+    
+    def __init__(self, on_submit_api_key, on_submit_pin, on_reset):
+        """
+        Инициализация экрана аутентификации.
+        
+        Args:
+            on_submit_api_key: Функция обратного вызова при отправке API ключа
+            on_submit_pin: Функция обратного вызова при отправке PIN-кода
+            on_reset: Функция обратного вызова при сбросе ключа
+        """
+        super().__init__()
+        self.on_submit_api_key = on_submit_api_key
+        self.on_submit_pin = on_submit_pin
+        self.on_reset = on_reset
+        
+        # Состояние экрана: 'pin' или 'api_key'
+        self.mode = 'pin'  # По умолчанию показываем ввод PIN
+        
+        # Поле для ввода с применением стилей из AppStyles
+        self.input_field = ft.TextField(
+            label="Введите PIN-код",
+            hint_text="4-значный PIN",
+            password=True,  # Обязательно включено для маскировки ввода
+            bgcolor=ft.Colors.GREY_800,
+            border_color=ft.Colors.GREY_700,
+            focused_border_color=ft.Colors.BLUE_400,
+            color=ft.Colors.WHITE,
+            cursor_color=ft.Colors.WHITE,
+            border_radius=8,
+            text_size=18,
+            width=300,
+            height=70,
+            text_align=ft.TextAlign.CENTER,
+            on_submit=self.handle_submit,  # Обработчик нажатия Enter
+            autofocus=True  # Автоматически ставим фокус на поле ввода при открытии
+        )
+        
+        # Кнопка отправки
+        self.submit_button = ft.ElevatedButton(
+            text="Войти",
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.BLUE_700,
+                padding=15,
+            ),
+            width=300,
+            height=50,
+            on_click=self.handle_submit
+        )
+        
+        # Кнопка переключения режима
+        self.mode_switch_button = ft.TextButton(
+            text="Использовать API ключ",
+            style=ft.ButtonStyle(
+                color=ft.Colors.BLUE_400
+            ),
+            on_click=self.switch_mode
+        )
+        
+        # Сообщение об ошибке
+        self.error_message = ft.Text(
+            color=ft.Colors.RED_500,
+            size=14,
+            visible=False
+        )
+        
+        # Информационное сообщение (для отображения PIN)
+        self.info_message = ft.Text(
+            color=ft.Colors.GREEN_400,
+            size=16,
+            text_align=ft.TextAlign.CENTER,
+            visible=False
+        )
+    
+    def build(self):
+        """
+        Создание интерфейса экрана аутентификации.
+        
+        Returns:
+            ft.Container: Контейнер с элементами интерфейса
+        """
+        # Заголовок
+        title = ft.Text(
+            "AI Chat",
+            size=32,
+            color=ft.Colors.BLUE_700,
+            weight=ft.FontWeight.BOLD,
+            text_align=ft.TextAlign.CENTER,
+        )
+        
+        # Подзаголовок
+        subtitle = ft.Text(
+            "Авторизация",
+            size=22,
+            color=ft.Colors.WHITE,
+            text_align=ft.TextAlign.CENTER,
+            weight=ft.FontWeight.W_500,
+        )
+        
+        # Основной контейнер с оформлением в стиле основного приложения
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    title,
+                    subtitle,
+                    ft.Container(height=30),  # Отступ
+                    self.input_field,
+                    self.error_message,
+                    self.info_message,
+                    ft.Container(height=10),  # Отступ
+                    self.submit_button,
+                    self.mode_switch_button,
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=10,
+            ),
+            alignment=ft.alignment.center,
+            padding=30,
+            border_radius=10,
+            bgcolor=ft.Colors.GREY_900,  # Темный фон как в основном приложении
+            width=400,
+            height=500,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=15,
+                color=ft.Colors.BLACK,
+                offset=ft.Offset(0, 5),
+            )
+        )
+    
+    def switch_mode(self, e):
+        """
+        Переключение между режимами ввода API ключа и PIN-кода.
+        
+        Args:
+            e: Событие клика
+        """
+        if self.mode == 'pin':
+            self.mode = 'api_key'
+            self.input_field.label = "Введите API ключ OpenRouter"
+            self.input_field.hint_text = "Ваш API ключ"
+            self.input_field.password = True
+            self.mode_switch_button.text = "Использовать PIN-код"
+            self.submit_button.text = "Подтвердить"
+        else:
+            self.mode = 'pin'
+            self.input_field.label = "Введите PIN-код"
+            self.input_field.hint_text = "4-значный PIN"
+            self.input_field.password = True
+            self.mode_switch_button.text = "Использовать API ключ"
+            self.submit_button.text = "Войти"
+        
+        # После переключения режима ставим фокус на поле ввода
+        self.input_field.focus()
+        
+        # Сброс сообщений
+        self.error_message.visible = False
+        self.info_message.visible = False
+        self.input_field.value = ""
+        self.update()
+    
+    def handle_submit(self, e):
+        """
+        Обработка отправки формы.
+        
+        Args:
+            e: Событие клика или нажатия Enter
+        """
+        if not self.input_field.value:
+            self.show_error("Поле не может быть пустым")
+            return
+        
+        if self.mode == 'pin':
+            # Проверка PIN-кода
+            self.on_submit_pin(self.input_field.value)
+        else:
+            # Отправка API ключа
+            self.on_submit_api_key(self.input_field.value)
+    
+    def show_error(self, message):
+        """
+        Отображение сообщения об ошибке.
+        
+        Args:
+            message: Текст сообщения об ошибке
+        """
+        self.error_message.value = message
+        self.error_message.visible = True
+        self.info_message.visible = False
+        self.update()
+    
+    def show_success(self, message):
+        """
+        Отображение информационного сообщения.
+        
+        Args:
+            message: Текст информационного сообщения
+        """
+        self.info_message.value = message
+        self.info_message.visible = True
+        self.error_message.visible = False
+        self.update()
+    
+    def reset_form(self):
+        """
+        Сброс формы.
+        """
+        self.input_field.value = ""
+        self.error_message.visible = False
+        self.info_message.visible = False
+        self.input_field.focus()  # Возвращаем фокус на поле ввода
+        self.update()

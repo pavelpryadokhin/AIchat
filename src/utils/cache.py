@@ -2,6 +2,8 @@ import sqlite3
 import json
 from datetime import datetime
 import threading
+import random
+import hashlib
 
 
 class ChatCache:
@@ -13,6 +15,7 @@ class ChatCache:
     - Сохранение метаданных (модель, токены, время)
     - Форматированный вывод истории
     - Очистку истории
+    - Хранение и управление API ключами и PIN-кодами для аутентификации
     """
 
     def __init__(self):
@@ -50,13 +53,10 @@ class ChatCache:
         """
         Создание необходимых таблиц в базе данных.
 
-        Создает таблицу messages со следующими полями:
-        - id: уникальный идентификатор сообщения
-        - model: идентификатор использованной модели
-        - user_message: текст сообщения пользователя
-        - ai_response: ответ AI модели
-        - timestamp: время создания сообщения
-        - tokens_used: количество использованных токенов
+        Создает таблицы:
+        - messages: для хранения сообщений
+        - analytics_messages: для хранения аналитики
+        - api_keys: для хранения API ключей и PIN-кодов
         """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -82,6 +82,16 @@ class ChatCache:
                 tokens_used INTEGER
             )
             ''')
+            
+        # Таблица для хранения API ключей и PIN-кодов
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                api_key_hash TEXT UNIQUE,
+                pin_code TEXT,
+                created_at DATETIME
+            )
+        ''')
 
         conn.commit()
         conn.close()
@@ -226,3 +236,104 @@ class ChatCache:
                 "tokens_used": row[5]
             })
         return history
+        
+    # --- Функции для аутентификации ---
+    
+    def _hash_api_key(self, api_key):
+        """
+        Хеширует API ключ для безопасного хранения.
+        
+        Args:
+            api_key (str): API ключ для хеширования
+            
+        Returns:
+            str: Хешированный API ключ
+        """
+        return hashlib.sha256(api_key.encode()).hexdigest()
+    
+    def register_api_key(self, api_key):
+        """
+        Регистрирует новый API ключ и генерирует для него PIN-код.
+        
+        Args:
+            api_key (str): API ключ для регистрации
+            
+        Returns:
+            str: Сгенерированный 4-значный PIN-код
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Генерация 4-значного PIN-кода
+        pin_code = ''.join([str(random.randint(0, 9)) for _ in range(4)])
+        
+        # Хеширование API ключа для безопасности
+        api_key_hash = self._hash_api_key(api_key)
+        
+        try:
+            cursor.execute('''
+                INSERT INTO api_keys (api_key_hash, pin_code, created_at)
+                VALUES (?, ?, ?)
+            ''', (api_key_hash, pin_code, datetime.now()))
+            conn.commit()
+            return pin_code
+        except sqlite3.IntegrityError:
+            # Если ключ уже существует, возвращаем существующий PIN
+            cursor.execute('SELECT pin_code FROM api_keys WHERE api_key_hash = ?', (api_key_hash,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    
+    def verify_pin(self, pin_code):
+        """
+        Проверяет существование PIN-кода в базе.
+        
+        Args:
+            pin_code (str): PIN-код для проверки
+            
+        Returns:
+            bool: True если PIN-код существует, False иначе
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT COUNT(*) FROM api_keys WHERE pin_code = ?', (pin_code,))
+        count = cursor.fetchone()[0]
+        return count > 0
+    
+    def delete_api_key_by_pin(self, pin_code):
+        """
+        Удаляет API ключ по PIN-коду.
+        
+        Args:
+            pin_code (str): PIN-код для удаления
+            
+        Returns:
+            bool: True если ключ был удален, False иначе
+        """
+        if not self.verify_pin(pin_code):
+            return False
+            
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM api_keys WHERE pin_code = ?', (pin_code,))
+        conn.commit()
+        return cursor.rowcount > 0
+    
+    def is_api_key_registered(self, api_key):
+        """
+        Проверяет, зарегистрирован ли API ключ.
+        
+        Args:
+            api_key (str): API ключ для проверки
+            
+        Returns:
+            bool: True если ключ зарегистрирован, False иначе
+        """
+        api_key_hash = self._hash_api_key(api_key)
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT COUNT(*) FROM api_keys WHERE api_key_hash = ?', (api_key_hash,))
+        count = cursor.fetchone()[0]
+        return count > 0
