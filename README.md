@@ -1,6 +1,8 @@
 # Приложение AI Chat
 
 Чат-приложение, использующее API OpenRouter для взаимодействия с различными моделями искусственного интеллекта.
+
+
  ![](Demo.gif)
 ## Начало работы
 
@@ -13,7 +15,7 @@
 2. **Клонирование проекта**
    ```bash
    # Клонируйте репозиторий
-   git clone https://github.com/
+   git clone https://github.com/pavelpryadokhin/AIchat.git
    # Перейдите в директорию проекта
    cd AIchat
    ```
